@@ -33,10 +33,7 @@ library(grDevices)
 library(RColorBrewer)
 ```
 
-```{r , echo=FALSE}
-load(file = "E:/Palma/orders_data.Rdata")
 
-```
 
 ***
 

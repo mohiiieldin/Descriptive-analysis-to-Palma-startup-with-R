@@ -1,0 +1,384 @@
+---
+title: "freelance"
+author: "mohie eldin"
+date: "October, 2019"
+output: 
+  html_document:
+    toc: yes  
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+
+
+```{r ,  include=FALSE}
+#orders$Year <- substring(orders$`Created at`,1,4) 
+#save(orders, file = "orders_data.Rdata")
+```
+
+
+```{r , include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=6) 
+library(readr)
+library(corrplot)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tidyr)
+library(Hmisc)
+library(gridExtra)
+library(grDevices)
+library(RColorBrewer)
+```
+
+```{r , echo=FALSE}
+load(file = "E:/Palma/orders_data.Rdata")
+
+```
+
+***
+
+## Part 1: Data
+
+#### The dataset information is about the orders that have been made from September 2018 to October 2019.
+#### It contains originally 64000 observations and 73 columns.
+#### I removed 15 column weather because most of them are missing or 99% corelated with another variable. 
+
+### causality :
+The data is an `observational` and hence we can not conclude causality from it so we will be able to show `association` between variables and experimental data is needed for further causal analysis.
+
+### Data entry problems :
+
+```{r , echo=FALSE}
+
+#showing the inconsistency in the data entery which make the analysis harder 
+head( grep("^[Cc]",unique(orders$`Billing City`),value = TRUE ) , 20)
+
+```
+
+#### There is no unified way in entering the city data and some other columns !
+
+```{r , echo=FALSE}
+orders %>% filter(Name == "PS49269") %>% select (Name ,`Financial Status` ,Currency)
+
+```
+
+#### Most of the customer data is written once and the rest of rows are empty !
+
+### So we have to make in the futur a unified way to enter the data through data validation techniques in Excel.
+* * *
+
+## Part 2: Research questions
+
+#### 1) What is the  best item category and what is the worst ? 
+
+#### 2) What is the best 5 items and the worst 5 ?
+
+#### 3) Are we able to categorized the customers into A,B and C classes so that we make customized offers to each ? 
+
+#### 4) Do the data reveal some common association between best sellers or between worst sellers or we need more information ?
+
+#### 5) What is the retention rate ?
+
+### Why these are interesting questions ? 
+
+#### Mainly answering these questions will make a deeper understanding to customers and open the doors for a better products and better customer satisfaction.
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+### Q1) What is the best item category and what is the worst ?
+
+
+
+```{r,echo=FALSE}
+cat("We have ",length(unique(orders$`Lineitem name`)), "different products with 5 categories") 
+
+over_all_sales <- sum(orders$Sales)
+over_all_quantity <- sum(orders$`Lineitem quantity`)
+categories <- orders %>% group_by(Items_category) %>% summarise(Quantity = sum(`Lineitem quantity`)  , Sales = sum(Sales), Quantity_propotion = round(Quantity/over_all_quantity,2) ,Sales_propotion = round(Sales/over_all_sales,2)
+ )                                                    
+
+head( categories %>% arrange(desc(Sales)) %>% as.data.frame())
+head(categories %>% arrange(desc(Quantity))%>% as.data.frame())
+
+
+p1 <- ggplot(data = categories , aes(x = Items_category , y = Sales , fill = Items_category , label = Sales)) +
+  geom_bar(stat = "identity") +
+  ggtitle("Sales per category") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_label(aes(fill = Items_category),colour = "white" , fontface = "bold")
+
+p2 <- ggplot(data = categories , aes(x = Items_category , y = Quantity , fill = Items_category , label = Quantity)) +
+  geom_bar(stat = "identity") +
+  ggtitle("Quantity per category") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_label(aes(fill = Items_category),colour = "white" , fontface = "bold") 
+
+p1
+
+p2
+```
+
+
+#### We noteced that summer bags soled more than backback; however, their sales are less than backback ! why ? 
+
+#### Also the card holders and slipper are not doing so well in both sales and quantity soled which need more investigation on the reasons behind this.
+
+### Q2) What is the best 5 items and the worst 5 ?
+
+
+```{r , echo=FALSE}
+best_worst_items <- orders %>%  
+group_by(`Lineitem name`, Items_category) %>% summarise(quantity_soled = sum(`Lineitem quantity`) , Sales = sum(Sales)) %>% as.data.frame()
+
+by_sales <- head(best_worst_items %>% arrange(desc(Sales)) , n = 5)
+by_quantity <-head(best_worst_items %>% arrange(desc(quantity_soled)) , n = 5)
+
+ggplot(data = by_sales , aes(x = reorder(`Lineitem name`,-Sales), y = Sales,fill = by_sales$Items_category  , label =  by_sales$Sales)) + geom_col() + geom_label(colour = "white" , fontface = "bold") +ggtitle(" top 5 best sellers") +
+  theme(plot.title = element_text(hjust = 0.5))+ xlab("Item name") 
+
+ggplot(data = by_quantity , aes(x = reorder(`Lineitem name`,-quantity_soled), y = quantity_soled,fill = by_sales$Items_category  , label =  by_quantity$quantity_soled)) + geom_col() + geom_label(colour = "white" , fontface = "bold") +ggtitle(" top 5 best quantity soled") +
+  theme(plot.title = element_text(hjust = 0.5)) + xlab("Item name")
+
+```
+
+
+
+```{r, echo=FALSE}
+
+worst_by_sales <- tail(best_worst_items %>% filter(`Lineitem name` != "Unknown") %>% arrange(desc(Sales)) , n = 5)
+
+ggplot(data = worst_by_sales , aes(x = reorder(`Lineitem name`,-Sales), y = Sales,fill = worst_by_sales$Items_category  , label =  worst_by_sales$Sales)) + geom_col() + geom_label(colour = "white" , fontface = "bold") +ggtitle(" worst 5 items in sales") +
+  theme(plot.title = element_text(hjust = 0.5)) + xlab("Item name")  
+
+```
+
+#### Interestingly the worst five items in sales are not slippers or card holders as expected but the five are summer bags !
+
+```{r, echo=FALSE}
+soled_one <- orders %>% group_by(`Lineitem name`,Items_category) %>% summarise(quantity = sum(`Lineitem quantity`)) %>% filter(quantity <= 3)
+
+ freq <- soled_one %>% 
+  group_by(Items_category) %>% 
+    tally()
+ 
+slices = freq$n
+lbls <-  freq$Items_category
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels
+lbls <- paste(lbls,"%",sep="") # ad % to labels
+pie(slices,labels = lbls, col=c("steelblue" , "purple","yellow","orangered","blue"),
+   main="percentage of items who are soled only once in each category")
+```
+
+#### Although summer bags are in the best sellers and most demanded items but it also in the worst !
+
+#### Actually we can turn this into a good thing, what about comparing the two groups in terms of the designs, marketing companies, time period and prices !
+
+### Q3) Are we able to categorized the customers into A,B and C classes so that we make customized offers to each ?
+
+```{r , echo=FALSE}
+#the propotions of prices 
+
+customer_categories <- orders %>%  filter(`Lineitem price` > 0 , !is.na(Email)) %>% 
+   group_by(Email) %>%
+    summarise(sales = sum(Sales) , quantity = sum(`Lineitem quantity`) )
+sales_classes <- table(cut2(customer_categories$sales , cuts = c(500,1000,359667)))
+
+f=function(x){ifelse(x>0 & x<501,"C",ifelse(x>500 & x <1001,"B","A"))}
+customer_categories$sales_category <- sapply(customer_categories$sales , f)
+categories_freq <- customer_categories %>% count(sales_category)
+sales_classes
+```
+
+
+
+```{r, echo=FALSE}
+slices <- categories_freq$n
+lbls <- categories_freq$sales_category
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels
+lbls <- paste(lbls,"%",sep="") # ad % to labels
+
+cols <- brewer.pal(3, "BuPu")
+pal <- colorRampPalette(cols) 
+pie(slices,labels = lbls, col=pal(3),
+   main="Propotions of customer categories based on sales")
+
+```
+
+
+```{r,echo=FALSE}
+quantity_classes <- table(cut2(customer_categories$quantity , cuts = c(1,2,3)))
+f=function(x){ifelse(x == 1 ,"C",ifelse(x == 2 ,"B","A"))}
+customer_categories$quantity_category <- sapply(customer_categories$quantity , f)
+categories_freq <- customer_categories %>% count(quantity_category)
+quantity_classes
+```
+
+
+
+```{r,echo=FALSE}
+slices <- categories_freq$n
+lbls <- categories_freq$quantity_category
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels
+lbls <- paste(lbls,"%",sep="") # ad % to labels
+
+cols <- brewer.pal(3, "BuPu")
+pal <- colorRampPalette(cols) 
+pie(slices,labels = lbls, col=pal(3),
+   main="Propotions of customer categories based on quantity they ordered") 
+
+```
+
+
+```{r, echo=FALSE}
+customer_categories$SQ_category <- paste(customer_categories$sales_category , customer_categories$quantity_category)
+```
+
+```{r}
+customer_categories %>% filter(Email == "alia.samir@msa.edu.eg") %>% as.data.frame()
+```
+
+#### Now we have a data frame that contains every thing that we need to know about each class, here is some information about calss A for example.
+
+```{r, echo=FALSE}
+class_A_email <- customer_categories %>% filter(sales_category == "A") %>% select(Email)
+class_A_email <- class_A_email$Email
+
+class_A_info <- orders %>% filter(Email %in% class_A_email & `Lineitem price` > 0) %>% select(Email , `Lineitem name` , Items_category,Sales,`Lineitem quantity`) 
+
+make_sure <-  class_A_info %>% group_by(Email) %>% summarise(total = sum(Sales)) 
+
+head(class_A_info %>% group_by(`Lineitem name`,Items_category)%>% summarise(quantity_soled = sum(`Lineitem quantity`) )) #5od da screenshot a
+```
+
+#### So now we have a deeper insights about what each class had ordered most and we can use this for customized offers ! 
+
+
+### Q4) Do the data reveal some common association between best sellers or between worst sellers or we need more information ?
+
+```{r , echo=FALSE}
+orders %>% filter(`Lineitem price` < 0) %>% group_by(`Lineitem name`,Items_category) %>% summarise(quantity = sum(`Lineitem quantity`) , sales = sum(Sales)) %>% arrange((sales))
+
+orders %>% filter(`Lineitem name` == "15' Cafe x Pink Laptop Bag" & `Lineitem price` > 0) %>% group_by(`Lineitem name`)%>% summarise(sales = sum(Sales) , quantity = sum(`Lineitem quantity`))
+
+```
+
+#### Actually it's wired that the most refunded items are doing well in general so we need to know the reasons of the refunds which may help.
+
+#### Remember the question of why the summer bags hve sales  less than the backbacks ? because of the high rate of refunds !
+
+#### So whta about a column that states the reasons of refund ? we can then work on deacresing this rate. 
+
+
+
+
+
+```{r , echo=FALSE}
+
+data = orders %>% filter(`Lineitem price` > 0 ) %>%
+        group_by(`Lineitem price`,Items_category)  %>%
+         summarise(quantity_orderd = sum(`Lineitem quantity`)) %>%
+          filter(quantity_orderd < 3000)
+price_classes <- table(cut2(data$`Lineitem price` , cuts = c(0,400,600)))
+
+ggplot(data = data , aes(x = data$`Lineitem price`, y = data$quantity_orderd, color = data$Items_category)) + geom_jitter()+ facet_wrap(. ~ data$Items_category)+ geom_smooth(method = "lm" , se = FALSE)+xlab("Price")+ylab("Quantity") + ggtitle("Quantity orderd for each category regarding the prices")
+ 
+
+```
+
+
+```{r, echo=FALSE , message=FALSE}
+
+numericVars <- which(sapply(orders , is.numeric))
+
+Cor <- cor(orders[,numericVars], use="pairwise.complete.obs") #correlations of all numeric variables
+
+#sort on decreasing correlations with SalePrice
+CorSorted <- as.matrix(sort(Cor[,'Sales'], decreasing = TRUE))
+ #select only high corelations with our respone variable
+CorHigh <- names(which(apply(CorSorted, 1, function(x) abs(x)>0.5)))
+#work on the rows --> margin = 1
+#apply return all the column names and True or False so which include the true only with thier names and finally names keeps the names only.
+corrplot.mixed( Cor[CorHigh, CorHigh], tl.col="black", tl.pos = "lt" )
+```
+
+#### Numerical variables are not helping a lot as expected as the date column is the most important one for a time serise analysis. 
+
+#### we may need to collect more data that can help us estimate items success of filure such as survies, design categories and more. 
+
+
+### Q5) What is the retention rate ?
+
+#### What is the number of customers in 19 and 18 ?
+```{r , echo=FALSE}
+
+#The number of customers :
+orders <- orders[which(!is.na(orders$Email)),]
+n_18 <- orders %>% filter(Year < "2019") %>% select(Email) %>% unique %>% nrow() 
+n_19 <- length(unique(orders$Email))
+cat("we had",n_18, "customers in 2018")
+cat("Now there are " ,n_19  , "customers in 2019" )
+years = c("2018","2019")
+number_of_customers = c(n_18,n_19)
+x <- data.frame(years,number_of_customers)
+
+ggplot(x , aes(years,number_of_customers,fill = years,label = number_of_customers)) +
+  geom_bar(stat = "identity") +
+  ggtitle("Number of customer in 2018 and in 2019") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_label(aes(fill = years),colour = "white" , fontface = "bold") 
+
+
+
+  
+```
+
+#### This is a huge improvment for increasing the number of customers. 
+
+#### So out of the 25,000 that we have now how many ordered more than once ?
+```{r , echo=FALSE}
+
+retention <- orders %>% select(Email,`Created at`) %>%
+               group_by(Email) %>%
+                summarise(number_of_orders = length(unique(`Created at`))) %>% 
+                 filter(number_of_orders > 1)
+
+people_ordered_more_than_once <- nrow(retention)
+prop_of_people_ordered_more_than_once = people_ordered_more_than_once/ length(unique(orders$Email))
+
+prop_of_people_ordered_more_than_once <- round(prop_of_people_ordered_more_than_once , 2)
+
+cat("There are " , people_ordered_more_than_once, "bought more than once which is only" ,prop_of_people_ordered_more_than_once *100,"%", "of the customers and we need to know why the rest ",100-prop_of_people_ordered_more_than_once*100,"% didn't order again !"  )
+
+slices <- c(people_ordered_more_than_once, (length(unique(orders$Email))-people_ordered_more_than_once) )
+lbls <- c( "Ordered more than once","Ordered once")
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels
+lbls <- paste(lbls,"%",sep="") # ad % to labels
+pie(slices,labels = lbls, col=c("steelblue" , "orangered"),
+   main="Propotions of customers who ordered once and who ordered more than once")
+
+```
+
+
+#### We can call them, take a feedback and hopefully to make them order again.
+
+## Part 4 : What's next ? 
+
+#### In the future :
+
+#### 1) The data problems has to be handled.
+#### 2) More information need to be collected.
+#### 3) This will open the door for a better understanding to customers and items and hence machine learning model will be bulit to predict the customer behaviour which is very interesting and promising !
+
+
+
+
+
